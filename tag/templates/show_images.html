@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block body %}
+  {% if session.logged_in %}
+    <form action="{{ url_for('add_image') }}" method=post enctype=multipart/form-data class=add-image>
+      <dl>
+        <dt>Title:
+        <dd><input type=text size=30 name=title>
+        <dt>Text:
+        <dd><textarea name=text rows=5 cols=40></textarea>
+        <dt>Image:
+        <dd><input type="file" name=image accept="image/*">
+        <dd><input type=submit value=Share>
+      </dl>
+    </form>
+  {% endif %}
+  <ul class=images>
+  {% for image in images %}
+    <li><h2>{{ image.title }}</h2>{{ image.text|safe }}<br>
+        <img class=image-pane src="{{ url_for('uploaded_file', filename=image.image) }}">
+  {% else %}
+    <li><em>Unbelievable.  No images here so far</em>
+  {% endfor %}
+  </ul>
+{% endblock %}
