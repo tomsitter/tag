@@ -4,8 +4,21 @@ import sqlite3
 from flask import Flask, request, session, g, redirect, url_for, abort, \
      render_template, flash, send_from_directory
 from werkzeug.utils import secure_filename
+from flask_restplus import Api, Resource, fields
+import base64
+from .geo import geocode
 
 app = Flask(__name__) # create the application instance
+api = Api(app, version='1.0', title='TAG API', description='A graffiti sharing app')
+
+ns = api.namespace('tag', description='TAG operations')
+
+image = api.model('Image', {
+    'title': fields.String(required=True, readOnly=True, description='Title of graffiti'),
+    'text': fields.String(readOnly=True, description='Description of graffiti'),
+    'image': fields.String(required=True, description='Image filename'),
+})
+
 app.config.from_object(__name__) # load config from this file , tag.py
 
 # Load default config and override config from an environment variable
@@ -19,57 +32,59 @@ app.config.update(dict(
 app.config.from_envvar('TAG_SETTINGS', silent=True)
 
 # Views
-@app.route('/')
-def show_images():
-    db = get_db()
-    cur = db.execute('select title, text, image from images order by id desc')
-    images = cur.fetchall()
-    return render_template('show_images.html', images=images)
+@api.route('/all')
+class Images(Resource):
+    def get(self):
+        db = get_db()
+        cur = db.execute('select title, text, image, lat, lon from images order by id desc')
+        images = [dict(image, file=b64encode(image['image'])) for image in cur.fetchall()]
+        return images
 
-@app.route('/add', methods=['POST'])
-def add_image():
-    if not session.get('logged_in'):
-        abort(401)
-    db = get_db()
-    if 'image' not in request.files:
-        flash('No Image!')
-        return redirect(url_for('show_images'))
-    image = request.files['image']
-    if image.filename == '':
-        flash('No selected file')
-        return redirect(url_for('show_images'))
-    if image and allowed_file(image.filename):
-        filename = secure_filename(image.filename)
-        image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        db.execute('insert into images (title, text, image) values (?, ?, ?)',
-                    [request.form['title'], request.form['text'], filename])
-        db.commit()
-        flash('New image was successfully posted')
-    return redirect(url_for('show_images'))
+@api.route('/add')
+class AddImage(Resource):
+    def post(self):
+        #if not session.get('logged_in'):
+        #    abort(401)
+        db = get_db()
+        if 'image' not in request.files:
+            return {'error': 'No File'}, 400
+        image = request.files['image']
+        if image.filename == '':
+            return {'error': 'No selected file'}, 400
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            full_filename = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image.save(full_filename)
+            lat, lon = geocode(full_filename)
+            db.execute('insert into images (title, text, image, lat, lon) values (?, ?, ?, ?, ?)',
+                    [request.form['title'], request.form['text'], filename, lat, lon])
+            print('saved to db')
+            db.commit()
+            return {'Success': 'New image was successfully posted'}
+        return {'Error': 'Unknown Error'}, 500
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+@api.route('/uploads/<filename>')
+class UploadedFile(Resource):
+    def get(self, filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        if request.form['username'] != app.config['USERNAME']:
-            error = 'Invalid username'
-        elif request.form['password'] != app.config['PASSWORD']:
-            error = 'Invalid password'
+@api.route('/login')
+class Login(Resource):
+    def post(self):
+        content = request.get_json()
+        if content['username'] != app.config['USERNAME']:
+            return {'error': 'Invalid username'}, 401
+        elif content['password'] != app.config['PASSWORD']:
+            return {'error': 'Invalid password'}, 401
         else:
             session['logged_in'] = True
-            flash('You were logged in')
-            return redirect(url_for('show_images'))
-    return render_template('login.html', error=error)
+            return {'success': 'You were logged in'}
 
-@app.route('/logout')
-def logout():
-    session.pop('logged_in', None)
-    flash('You were logged out')
-    return redirect(url_for('show_images'))
+@api.route('/logout')
+class Logout(Resource):
+    def get(self):
+        session.pop('logged_in', None)
+        return {'success': 'You are now logged out'}
 
 # Database
 
@@ -113,3 +128,7 @@ def allowed_file(filename):
     ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def b64encode(filename):
+    file = open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'rb').read()
+    return base64.b64encode(file).decode('utf-8')
