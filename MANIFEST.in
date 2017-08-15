@@ -1,3 +1,2 @@
 graft tag/templates
 graft tag/static
-include tag/schema.sql
