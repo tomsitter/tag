@@ -6,7 +6,9 @@ setup(
     include_package_data=True,
     install_requires=[
         'flask',
-        'Pillow'
+        'flask-sqlalchemy',
+        'flask-restplus',
+        'Pillow',
     ],
     setup_requires=[
         'pytest-runner',
