@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String
+from geoalchemy2 import Geometry
 from tag import db
 
 class User(db.Model):
@@ -20,8 +21,7 @@ class Image(db.Model):
     title = Column(String(50))
     description = Column(String(500))
     filename = Column(String(50), unique=True)
-    latitude = Column(String(12))
-    longitude = Column(String(12))
+    location = Column(Geometry('POINT', srid=4326))
 
     def __init__(self, title, description, filename, latitude, longitude):
         self.title = title
@@ -32,3 +32,6 @@ class Image(db.Model):
 
     def __repr__(self):
         return '<Image %r>' % self.title
+
+    def as_dict(self):
+        return {c.name:getattr(self, c.name) for c in self.__table__.columns}

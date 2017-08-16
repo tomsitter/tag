@@ -2,28 +2,25 @@
 import os
 import base64
 
-from flask import request, session, send_from_directory
+from flask import request, session, send_from_directory, jsonify
 from werkzeug.utils import secure_filename
 from flask_restplus import Resource
+
 from .geo import geocode
 from .models import Image
 from tag import app, api, db
-
 
 @api.route('/all')
 class Images(Resource):
     def get(self):
         # TODO: Get access to database
         #images = [dict(image, file=b64encode(image['image'])) for image in cur.fetchall()]
-        images = [{'test': 1}, {'test': 2}]
-        return images
+        images = Image.query.all()
+        return jsonify([i.as_dict() for i in images])
 
-@api.route('/add')
+@api.route('/upload')
 class AddImage(Resource):
     def post(self):
-        #if not session.get('logged_in'):
-        #    abort(401)
-         # TODO: Get access to database
         if 'image' not in request.files:
             return {'error': 'No File'}, 400
         image = request.files['image']
@@ -33,18 +30,27 @@ class AddImage(Resource):
             filename = secure_filename(image.filename)
             full_filename = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             image.save(full_filename)
-            lat, lon = geocode(full_filename)
+            try:
+                location = geocode(full_filename)
+            except KeyError as err:
+                print('No GPS Info')
+                location = None
             i = Image(
                 title=request.form['title'],
                 description=request.form['description'],
-                filename=request.form['filename'],
-                latitude=lat,
-                longitude=lon
+                filename=filename,
+                location=location,
             )
             db.session.add(i)
             db.session.commit()            
             return {'Success': 'New image was successfully posted'}
         return {'Error': 'Unknown Error'}, 500
+
+
+@api.route('/nearby')
+class Nearby(Resource):
+    def get(self, lat, lon):
+        
 
 @api.route('/uploads/<filename>')
 class UploadedFile(Resource):

@@ -2,13 +2,10 @@ from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 
 def geocode(filename):
-    print('Opening image')
     image = Image.open(filename)
-    print('Opened Image')
     info = get_exif_data(image)
-    print('Got info')
-    location = get_lat_lon(info)
-    return location
+    lat, lon = get_lat_lon(info)
+    return make_point(lat, lon)
 
 def get_exif_data(image):
     """Returns a dictionary from the exif data of an PIL Image item. Also converts the GPS Tags"""
@@ -52,3 +49,6 @@ def get_lat_lon(info):
     if gps_longitude_ref != "E":
         lon *= -1
     return lat, lon
+
+def make_point(lat, lon):
+    return 'POINT ({lat}, {lon})'.format(lat=lat, lon=lon)

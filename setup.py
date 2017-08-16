@@ -8,6 +8,7 @@ setup(
         'flask',
         'flask-sqlalchemy',
         'flask-restplus',
+        'geoalchemy2',
         'Pillow',
     ],
     setup_requires=[
@@ -16,4 +17,9 @@ setup(
     tests_require=[
         'pytest',
     ],
+    extras_require={
+        'dev': [
+            'sqlalchemy-migrate',
+        ]
+    }
 )
